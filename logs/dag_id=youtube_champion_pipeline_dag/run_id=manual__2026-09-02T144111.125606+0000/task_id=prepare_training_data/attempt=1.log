@@ -1,0 +1,34 @@
+[2026-09-02T14:41:22.232+0000] {local_task_job_runner.py:123} INFO - ::group::Pre task execution logs
+[2026-09-02T14:41:22.257+0000] {taskinstance.py:2613} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: youtube_champion_pipeline_dag.prepare_training_data manual__2026-09-02T14:41:11.125606+00:00 [queued]>
+[2026-09-02T14:41:22.267+0000] {taskinstance.py:2613} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: youtube_champion_pipeline_dag.prepare_training_data manual__2026-09-02T14:41:11.125606+00:00 [queued]>
+[2026-09-02T14:41:22.275+0000] {taskinstance.py:2866} INFO - Starting attempt 1 of 2
+[2026-09-02T14:41:22.290+0000] {taskinstance.py:2889} INFO - Executing <Task(PythonOperator): prepare_training_data> on 2026-09-02 14:41:11.125606+00:00
+[2026-09-02T14:41:22.298+0000] {warnings.py:112} WARNING - /home/***/.local/lib/python3.12/site-packages/***/task/task_runner/standard_task_runner.py:70: DeprecationWarning: This process (pid=830) is multi-threaded, use of fork() may lead to deadlocks in the child.
+  pid = os.fork()
+
+[2026-09-02T14:41:22.300+0000] {standard_task_runner.py:72} INFO - Started process 831 to run task
+[2026-09-02T14:41:22.300+0000] {standard_task_runner.py:104} INFO - Running: ['***', 'tasks', 'run', 'youtube_champion_pipeline_dag', 'prepare_training_data', 'manual__2026-09-02T14:41:11.125606+00:00', '--job-id', '21', '--raw', '--subdir', 'DAGS_FOLDER/ml_02_youtube_pipeline.py', '--cfg-path', '/tmp/tmpxngj5h_q']
+[2026-09-02T14:41:22.301+0000] {standard_task_runner.py:105} INFO - Job 21: Subtask prepare_training_data
+[2026-09-02T14:41:22.378+0000] {task_command.py:467} INFO - Running <TaskInstance: youtube_champion_pipeline_dag.prepare_training_data manual__2026-09-02T14:41:11.125606+00:00 [running]> on host 813b820bbdeb
+[2026-09-02T14:41:22.487+0000] {taskinstance.py:3132} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='workshop2' AIRFLOW_CTX_DAG_ID='youtube_champion_pipeline_dag' AIRFLOW_CTX_TASK_ID='prepare_training_data' AIRFLOW_CTX_EXECUTION_DATE='2026-09-02T14:41:11.125606+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-09-02T14:41:11.125606+00:00'
+[2026-09-02T14:41:22.488+0000] {taskinstance.py:731} INFO - ::endgroup::
+[2026-09-02T14:41:25.695+0000] {logging_mixin.py:190} INFO - ข้อมูลพร้อมเทรน: 40,949 แถว
+[2026-09-02T14:41:25.695+0000] {logging_mixin.py:190} INFO - Features ที่ใช้:
+[2026-09-02T14:41:25.696+0000] {logging_mixin.py:190} INFO - - category_id
+[2026-09-02T14:41:25.696+0000] {logging_mixin.py:190} INFO - - likes
+[2026-09-02T14:41:25.697+0000] {logging_mixin.py:190} INFO - - dislikes
+[2026-09-02T14:41:25.697+0000] {logging_mixin.py:190} INFO - - comment_count
+[2026-09-02T14:41:25.698+0000] {logging_mixin.py:190} INFO - - comments_disabled
+[2026-09-02T14:41:25.698+0000] {logging_mixin.py:190} INFO - - ratings_disabled
+[2026-09-02T14:41:25.698+0000] {logging_mixin.py:190} INFO - - publish_hour
+[2026-09-02T14:41:25.699+0000] {logging_mixin.py:190} INFO - - publish_day_of_week
+[2026-09-02T14:41:25.699+0000] {logging_mixin.py:190} INFO - - title_length
+[2026-09-02T14:41:25.700+0000] {logging_mixin.py:190} INFO - - tag_count
+[2026-09-02T14:41:25.707+0000] {logging_mixin.py:190} INFO - Train: 32,759 แถว
+[2026-09-02T14:41:25.708+0000] {logging_mixin.py:190} INFO - Test: 8,190 แถว
+[2026-09-02T14:41:26.047+0000] {python.py:240} INFO - Done. Returned value was: None
+[2026-09-02T14:41:26.063+0000] {taskinstance.py:340} INFO - ::group::Post task execution logs
+[2026-09-02T14:41:26.064+0000] {taskinstance.py:352} INFO - Marking task as SUCCESS. dag_id=youtube_champion_pipeline_dag, task_id=prepare_training_data, run_id=manual__2026-09-02T14:41:11.125606+00:00, execution_date=20260902T144111, start_date=20260902T144122, end_date=20260902T144126
+[2026-09-02T14:41:26.138+0000] {local_task_job_runner.py:266} INFO - Task exited with return code 0
+[2026-09-02T14:41:26.172+0000] {taskinstance.py:3895} INFO - 1 downstream tasks scheduled from follow-on schedule check
+[2026-09-02T14:41:26.182+0000] {local_task_job_runner.py:245} INFO - ::endgroup::

@@ -1,202 +1,1835 @@
 """
-main.py — Iris Model Serving API (Workshop 2, ตัวอย่างขั้นสูง)
-================
-FastAPI service แยกจาก Airflow โดยสิ้นเชิง ทำหน้าที่แค่อย่างเดียวคือ
-"เสิร์ฟโมเดลล่าสุดที่ Airflow deploy ไว้" ให้เรียกใช้งานผ่าน HTTP ได้
+main.py — YouTube Views Prediction Studio
+=========================================
+Workshop 2: Model Serving API
 
-ไฟล์นี้ดูแลเฉพาะโมเดล iris (Stage 1) เท่านั้น ส่วนโมเดลพยากรณ์อากาศ
-(Stage 2) แยกออกไปอยู่ที่ weather.py ต่างหาก แล้ว import เข้ามาต่อ
-(ผ่าน app.include_router) เพื่อไม่ให้โค้ดสองส่วนนี้ปนกัน
-
-แนวคิดสำคัญ:
-- ไม่ cache โมเดลไว้ในหน่วยความจำ โหลดจากไฟล์ใหม่ทุกครั้งที่มีการเรียก
-  /predict ทำให้ได้โมเดลล่าสุดเสมอโดยไม่ต้อง restart service หรือทำ
-  endpoint /reload แยกต่างหาก (แลกกับ performance เล็กน้อย ซึ่งรับได้
-  สำหรับ demo/งานที่ traffic ไม่สูงมาก)
-- อ่านไฟล์โมเดลจาก path เดียวกับที่ DAG deploy_model เขียนไว้ ผ่าน
-  Docker volume ที่ mount ร่วมกันระหว่าง Airflow container กับ service นี้
-  (ดู docker-compose.yaml ส่วน model_api และ x-airflow-common)
-
-รันแยกจาก Airflow อย่างสิ้นเชิง คนละ container คนละ process
+UI แบบ YouTube Studio Dashboard
+ใช้ FastAPI + Apache Airflow + Random Forest
 """
 
-import os
-import time
-from datetime import datetime
-
-import joblib
-import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
-from sklearn.datasets import load_iris
 
-from weather import router as weather_router, weather_model_file_info, WEATHER_FORM_HTML
-
-# Path นี้คือฝั่ง "ในตัว container ของ model_api" (ดู docker-compose.yaml
-# ที่ mount โฟลเดอร์เดียวกับที่ Airflow เขียนโมเดลไว้ มาที่ /models)
-MODEL_PATH = "/models/iris_models/current_model.pkl"
-
-TARGET_NAMES = load_iris().target_names.tolist()
-
-app = FastAPI(title="Iris + Weather Model Serving API", version="1.1.0")
-app.include_router(weather_router)   # เพิ่ม endpoint /predict_weather จากไฟล์ weather.py
+from youtube import (
+    router as youtube_router,
+    youtube_model_file_info,
+    YOUTUBE_FORM_HTML,
+)
 
 
-class PredictRequest(BaseModel):
-    sepal_length: float = Field(..., example=5.1)
-    sepal_width: float = Field(..., example=3.5)
-    petal_length: float = Field(..., example=1.4)
-    petal_width: float = Field(..., example=0.2)
+# =========================================================
+# FastAPI
+# =========================================================
+
+app = FastAPI(
+    title="YouTube Views Prediction API",
+    description=(
+        "Machine Learning Model Serving "
+        "with Apache Airflow + FastAPI"
+    ),
+    version="2.0.0",
+)
+
+app.include_router(youtube_router)
 
 
-class PredictResponse(BaseModel):
-    predicted_class: str
-    confidence: float
-    model_last_modified: str
-
-
-def load_current_model():
-    """โหลดโมเดล iris ล่าสุดจากไฟล์ ทุกครั้งที่เรียก (ไม่ cache)"""
-    if not os.path.exists(MODEL_PATH):
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "ยังไม่มีไฟล์โมเดล — ต้องรัน DAG iris_pipeline_dag ใน Airflow "
-                "อย่างน้อย 1 ครั้งก่อน (ต้องผ่าน task deploy_model ด้วย)"
-            ),
-        )
-    return joblib.load(MODEL_PATH)
-
+# =========================================================
+# Health
+# =========================================================
 
 @app.get("/health")
 def health():
-    """เช็คสถานะ service + ข้อมูลไฟล์โมเดลทั้งสองตัว (iris จากไฟล์นี้, weather จาก weather.py)"""
-    exists = os.path.exists(MODEL_PATH)
-    last_modified = None
-    if exists:
-        last_modified = datetime.fromtimestamp(os.path.getmtime(MODEL_PATH)).isoformat()
 
     return {
         "status": "ok",
-        "iris_model": {"exists": exists, "last_modified": last_modified},
-        "weather_model": weather_model_file_info(),   # มาจาก weather.py
+        "service": "youtube-views-model-api",
+        "youtube_model": youtube_model_file_info(),
     }
 
 
-@app.post("/predict", response_model=PredictResponse)
-def predict(payload: PredictRequest):
-    """ทำนายพันธุ์ดอกไม้จาก 4 ค่าที่ส่งมา ใช้โมเดลล่าสุดที่ Airflow deploy ไว้"""
-    model = load_current_model()
-
-    features = np.array([[
-        payload.sepal_length,
-        payload.sepal_width,
-        payload.petal_length,
-        payload.petal_width,
-    ]])
-
-    prediction = model.predict(features)[0]
-    probabilities = model.predict_proba(features)[0]
-    confidence = float(probabilities[prediction])
-
-    last_modified = datetime.fromtimestamp(os.path.getmtime(MODEL_PATH)).isoformat()
-
-    return PredictResponse(
-        predicted_class=TARGET_NAMES[prediction],
-        confidence=round(confidence, 4),
-        model_last_modified=last_modified,
-    )
-
+# =========================================================
+# Home
+# =========================================================
 
 @app.get("/", response_class=HTMLResponse)
-def test_page():
-    """หน้าเว็บทดสอบง่ายๆ ในตัว ไม่ต้องมี frontend แยก กรอกค่าแล้วกดทายได้เลย"""
-    iris_page = """
+def home():
+
+    model_info = youtube_model_file_info()
+
+    model_status = (
+        "Model Ready"
+        if model_info["exists"]
+        else "Model Not Found"
+    )
+
+    model_modified = (
+        model_info["last_modified"]
+        if model_info["last_modified"]
+        else "Waiting for deployment"
+    )
+
+    page_start = f"""
 <!DOCTYPE html>
-<html lang="th">
+
+<html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
-<title>Iris + Weather Model Serving — หน้าทดสอบ</title>
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>
+YouTube ML Studio
+</title>
+
+
 <style>
-  body { font-family: 'TH Sarabun New', Tahoma, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; color: #1f2937; }
-  h1 { font-size: 22px; color: #1F4E79; }
-  .field { margin-bottom: 14px; }
-  label { display: block; font-size: 15px; margin-bottom: 4px; color: #374151; }
-  input { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; box-sizing: border-box; }
-  button { width: 100%; padding: 10px; background: #1F4E79; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; margin-top: 8px; }
-  button:hover { background: #2E74B5; }
-  #result, #weather_result { margin-top: 20px; padding: 14px; border-radius: 8px; display: none; }
-  #result.ok, #weather_result.ok { background: #E1F5EE; border-left: 4px solid #085041; }
-  #result.err, #weather_result.err { background: #FCEBEB; border-left: 4px solid #791F1F; }
-  .meta { font-size: 13px; color: #6b7280; margin-top: 6px; }
+
+/* ======================================================
+   RESET
+====================================================== */
+
+* {{
+    box-sizing: border-box;
+}}
+
+html {{
+    scroll-behavior: smooth;
+}}
+
+body {{
+    margin: 0;
+
+    font-family:
+        Inter,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Arial,
+        sans-serif;
+
+    background: #0f0f0f;
+
+    color: #f1f1f1;
+}}
+
+
+a {{
+    color: inherit;
+}}
+
+
+/* ======================================================
+   TOP BAR
+====================================================== */
+
+.topbar {{
+
+    position: fixed;
+
+    top: 0;
+    left: 0;
+    right: 0;
+
+    height: 64px;
+
+    background:
+        rgba(15, 15, 15, .96);
+
+    backdrop-filter:
+        blur(16px);
+
+    border-bottom:
+        1px solid #282828;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content:
+        space-between;
+
+    padding:
+        0 24px;
+
+    z-index: 1000;
+}}
+
+
+.top-left {{
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 18px;
+}}
+
+
+.menu-icon {{
+
+    width: 24px;
+
+    font-size: 20px;
+
+    color: #aaa;
+}}
+
+
+.brand {{
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    font-size: 19px;
+
+    font-weight: 700;
+
+    letter-spacing:
+        -.4px;
+}}
+
+
+.youtube-logo {{
+
+    width: 38px;
+
+    height: 26px;
+
+    background: #ff0033;
+
+    border-radius: 7px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    box-shadow:
+        0 5px 18px
+        rgba(255, 0, 51, .25);
+
+    color: white;
+
+    font-size: 13px;
+}}
+
+
+.brand-light {{
+
+    color: #aaa;
+
+    font-weight: 500;
+}}
+
+
+.top-status {{
+
+    background: #17251b;
+
+    color: #55d976;
+
+    border:
+        1px solid #25472e;
+
+    border-radius: 20px;
+
+    padding:
+        7px 13px;
+
+    font-size: 12px;
+
+    font-weight: 600;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+}}
+
+
+.online-dot {{
+
+    width: 7px;
+
+    height: 7px;
+
+    background: #4ade80;
+
+    border-radius: 50%;
+
+    box-shadow:
+        0 0 8px #4ade80;
+}}
+
+
+/* ======================================================
+   SIDEBAR
+====================================================== */
+
+.sidebar {{
+
+    position: fixed;
+
+    top: 64px;
+
+    left: 0;
+
+    bottom: 0;
+
+    width: 230px;
+
+    padding:
+        20px 14px;
+
+    background: #0f0f0f;
+
+    border-right:
+        1px solid #272727;
+
+    overflow-y: auto;
+}}
+
+
+.menu-label {{
+
+    font-size: 11px;
+
+    color: #717171;
+
+    text-transform:
+        uppercase;
+
+    letter-spacing:
+        1px;
+
+    margin:
+        22px 12px
+        8px;
+}}
+
+
+.nav-item {{
+
+    height: 44px;
+
+    padding:
+        0 14px;
+
+    margin:
+        3px 0;
+
+    border-radius:
+        9px;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 13px;
+
+    color: #aaa;
+
+    text-decoration: none;
+
+    font-size: 14px;
+
+    transition:
+        all .18s ease;
+}}
+
+
+.nav-item:hover {{
+
+    background: #242424;
+
+    color: white;
+}}
+
+
+.nav-item.active {{
+
+    background: #272727;
+
+    color: white;
+
+    font-weight: 600;
+}}
+
+
+.nav-icon {{
+
+    width: 22px;
+
+    text-align: center;
+
+    font-size: 17px;
+}}
+
+
+/* ======================================================
+   MAIN
+====================================================== */
+
+.main {{
+
+    margin-left: 230px;
+
+    padding:
+        96px 34px
+        50px;
+
+    min-height: 100vh;
+}}
+
+
+.page-header {{
+
+    display: flex;
+
+    align-items:
+        flex-end;
+
+    justify-content:
+        space-between;
+
+    margin-bottom:
+        28px;
+}}
+
+
+.page-title {{
+
+    margin: 0;
+
+    font-size: 27px;
+
+    letter-spacing:
+        -.7px;
+}}
+
+
+.page-subtitle {{
+
+    color: #8f8f8f;
+
+    margin-top: 7px;
+
+    font-size: 13px;
+}}
+
+
+.live-badge {{
+
+    padding:
+        8px 12px;
+
+    border-radius:
+        8px;
+
+    background:
+        #1d1d1d;
+
+    border:
+        1px solid #303030;
+
+    color: #aaa;
+
+    font-size: 12px;
+}}
+
+
+/* ======================================================
+   ANALYTICS CARDS
+====================================================== */
+
+.analytics-grid {{
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            4,
+            minmax(0,1fr)
+        );
+
+    gap: 16px;
+
+    margin-bottom:
+        22px;
+}}
+
+
+.analytics-card {{
+
+    background: #181818;
+
+    border:
+        1px solid #2b2b2b;
+
+    border-radius:
+        14px;
+
+    padding:
+        20px;
+
+    min-height: 118px;
+
+    transition:
+        transform .2s ease,
+        border-color .2s ease;
+}}
+
+
+.analytics-card:hover {{
+
+    transform:
+        translateY(-2px);
+
+    border-color:
+        #444;
+}}
+
+
+.analytics-title {{
+
+    color: #8f8f8f;
+
+    font-size: 12px;
+
+    margin-bottom:
+        12px;
+}}
+
+
+.analytics-value {{
+
+    font-size: 24px;
+
+    font-weight: 700;
+
+    letter-spacing:
+        -.5px;
+
+    color: #fff;
+}}
+
+
+.analytics-small {{
+
+    margin-top:
+        7px;
+
+    color: #686868;
+
+    font-size: 11px;
+}}
+
+
+.green {{
+
+    color: #4ade80;
+}}
+
+
+.red {{
+
+    color: #ff4e45;
+}}
+
+
+/* ======================================================
+   CONTENT GRID
+====================================================== */
+
+.content-grid {{
+
+    display: grid;
+
+    grid-template-columns:
+        minmax(0, 1.5fr)
+        minmax(290px, .65fr);
+
+    gap: 20px;
+}}
+
+
+/* ======================================================
+   PANEL
+====================================================== */
+
+.panel {{
+
+    background: #181818;
+
+    border:
+        1px solid #2b2b2b;
+
+    border-radius:
+        14px;
+
+    overflow: hidden;
+}}
+
+
+.panel-header {{
+
+    padding:
+        20px 22px;
+
+    border-bottom:
+        1px solid #292929;
+}}
+
+
+.panel-title {{
+
+    margin: 0;
+
+    font-size: 16px;
+
+    font-weight: 650;
+}}
+
+
+.panel-description {{
+
+    color: #858585;
+
+    font-size: 12px;
+
+    margin:
+        7px 0 0;
+
+    line-height:
+        1.5;
+}}
+
+
+.panel-body {{
+
+    padding:
+        22px;
+}}
+
+
+/* ======================================================
+   FORM OVERRIDE
+====================================================== */
+
+/*
+youtube.py มี HTML Form อยู่แล้ว
+ตรงนี้ใช้ CSS ทำให้ฟอร์มเดิมกลายเป็น Studio UI
+*/
+
+.panel-body > hr {{
+    display: none;
+}}
+
+
+.panel-body > h1 {{
+
+    display: none;
+}}
+
+
+.panel-body > p {{
+
+    display: none;
+}}
+
+
+.field {{
+
+    margin-bottom:
+        15px;
+}}
+
+
+.field label {{
+
+    display: block;
+
+    margin-bottom:
+        7px;
+
+    color: #b7b7b7;
+
+    font-size: 12px;
+
+    font-weight: 600;
+}}
+
+
+input,
+select {{
+
+    width: 100%;
+
+    height: 44px;
+
+    padding:
+        0 13px;
+
+    background: #121212;
+
+    border:
+        1px solid #343434;
+
+    color: white;
+
+    border-radius:
+        8px;
+
+    font-size: 13px;
+
+    outline: none;
+
+    transition:
+        .2s ease;
+}}
+
+
+input:hover,
+select:hover {{
+
+    border-color: #4a4a4a;
+}}
+
+
+input:focus,
+select:focus {{
+
+    border-color:
+        #3ea6ff;
+
+    box-shadow:
+        0 0 0 2px
+        rgba(
+            62,
+            166,
+            255,
+            .12
+        );
+}}
+
+
+input[type="checkbox"] {{
+
+    width: auto;
+
+    height: auto;
+
+    accent-color:
+        #3ea6ff;
+}}
+
+
+/* ======================================================
+   BUTTON
+====================================================== */
+
+button {{
+
+    width: 100%;
+
+    min-height:
+        46px;
+
+    margin-top:
+        12px;
+
+    border: 0;
+
+    border-radius:
+        8px;
+
+    background:
+        #ff0033;
+
+    color: white;
+
+    font-weight: 700;
+
+    font-size: 14px;
+
+    cursor: pointer;
+
+    transition:
+        all .2s ease;
+
+    box-shadow:
+        0 7px 20px
+        rgba(
+            255,
+            0,
+            51,
+            .18
+        );
+}}
+
+
+button:hover {{
+
+    background:
+        #e9002e;
+
+    transform:
+        translateY(-1px);
+}}
+
+
+button:active {{
+
+    transform:
+        scale(.995);
+}}
+
+
+/* ======================================================
+   RESULT
+====================================================== */
+
+#youtube_result {{
+
+    margin-top:
+        20px;
+
+    display: none;
+
+    padding:
+        20px;
+
+    border-radius:
+        10px;
+}}
+
+
+#youtube_result.ok {{
+
+    display: block;
+
+    background:
+        linear-gradient(
+            135deg,
+            #18251d,
+            #142019
+        );
+
+    border:
+        1px solid #2c5236;
+}}
+
+
+#youtube_result.err {{
+
+    display: block;
+
+    background:
+        #291719;
+
+    border:
+        1px solid #5c292c;
+
+    color:
+        #ff7b7b;
+}}
+
+
+#youtube_result.ok > div:first-child {{
+
+    font-size:
+        28px !important;
+
+    font-weight:
+        750 !important;
+
+    color:
+        #5ee27e;
+
+    letter-spacing:
+        -.7px;
+
+    margin-bottom:
+        10px;
+}}
+
+
+.meta {{
+
+    color: #8a9a8d;
+
+    font-size: 11px;
+
+    margin-top:
+        5px;
+}}
+
+
+/* ======================================================
+   MODEL PANEL
+====================================================== */
+
+.model-panel {{
+
+    padding: 22px;
+}}
+
+
+.model-heading {{
+
+    font-size:
+        16px;
+
+    font-weight:
+        650;
+
+    margin-bottom:
+        20px;
+}}
+
+
+.model-status {{
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    padding:
+        13px;
+
+    border-radius:
+        9px;
+
+    background: #122018;
+
+    border:
+        1px solid #254730;
+
+    color:
+        #5cde7c;
+
+    font-size:
+        13px;
+
+    margin-bottom:
+        20px;
+}}
+
+
+.status-circle {{
+
+    width: 9px;
+
+    height: 9px;
+
+    border-radius:
+        50%;
+
+    background:
+        #4ade80;
+
+    box-shadow:
+        0 0 9px
+        #4ade80;
+}}
+
+
+.info-row {{
+
+    padding:
+        14px 0;
+
+    border-bottom:
+        1px solid #282828;
+}}
+
+
+.info-row:last-of-type {{
+
+    border-bottom: 0;
+}}
+
+
+.info-label {{
+
+    color:
+        #6f6f6f;
+
+    font-size:
+        10px;
+
+    text-transform:
+        uppercase;
+
+    letter-spacing:
+        .8px;
+
+    margin-bottom:
+        5px;
+}}
+
+
+.info-value {{
+
+    font-size:
+        13px;
+
+    color:
+        #d1d1d1;
+
+    word-break:
+        break-word;
+
+    line-height:
+        1.5;
+}}
+
+
+/* ======================================================
+   QUICK LINKS
+====================================================== */
+
+.quick-title {{
+
+    margin:
+        25px 0
+        10px;
+
+    font-size:
+        11px;
+
+    color:
+        #6f6f6f;
+
+    text-transform:
+        uppercase;
+
+    letter-spacing:
+        .8px;
+}}
+
+
+.quick-link {{
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content:
+        space-between;
+
+    height:
+        42px;
+
+    padding:
+        0 12px;
+
+    margin:
+        7px 0;
+
+    border-radius:
+        8px;
+
+    background:
+        #202020;
+
+    border:
+        1px solid #2e2e2e;
+
+    color:
+        #c7c7c7;
+
+    text-decoration:
+        none;
+
+    font-size:
+        12px;
+
+    transition:
+        .2s ease;
+}}
+
+
+.quick-link:hover {{
+
+    background:
+        #292929;
+
+    color:
+        #fff;
+
+    border-color:
+        #414141;
+}}
+
+
+/* ======================================================
+   MINI GRAPH
+====================================================== */
+
+.chart-card {{
+
+    margin-top:
+        18px;
+
+    padding:
+        16px;
+
+    border-radius:
+        10px;
+
+    background:
+        #121212;
+
+    border:
+        1px solid #282828;
+}}
+
+
+.chart-title {{
+
+    color:
+        #868686;
+
+    font-size:
+        11px;
+
+    margin-bottom:
+        16px;
+}}
+
+
+.chart {{
+
+    height:
+        70px;
+
+    display: flex;
+
+    align-items:
+        flex-end;
+
+    gap:
+        6px;
+}}
+
+
+.bar {{
+
+    flex: 1;
+
+    background:
+        linear-gradient(
+            to top,
+            #ff0033,
+            #ff4f69
+        );
+
+    border-radius:
+        3px 3px
+        1px 1px;
+
+    opacity:
+        .75;
+}}
+
+
+.bar:hover {{
+
+    opacity: 1;
+}}
+
+
+/* ======================================================
+   RESPONSIVE
+====================================================== */
+
+@media (
+    max-width: 1050px
+) {{
+
+    .analytics-grid {{
+
+        grid-template-columns:
+            repeat(2,1fr);
+    }}
+
+
+    .content-grid {{
+
+        grid-template-columns:
+            1fr;
+    }}
+
+}}
+
+
+@media (
+    max-width: 760px
+) {{
+
+    .sidebar {{
+
+        display: none;
+    }}
+
+
+    .main {{
+
+        margin-left: 0;
+
+        padding:
+            90px 16px
+            40px;
+    }}
+
+
+    .topbar {{
+
+        padding:
+            0 16px;
+    }}
+
+}}
+
+
+@media (
+    max-width: 520px
+) {{
+
+    .analytics-grid {{
+
+        grid-template-columns:
+            1fr;
+    }}
+
+
+    .page-header {{
+
+        align-items:
+            flex-start;
+
+        flex-direction:
+            column;
+
+        gap:
+            14px;
+    }}
+
+}}
+
 </style>
+
 </head>
+
+
 <body>
-  <h1>🌸 Iris Model — หน้าทดสอบ</h1>
-  <p style="color:#6b7280; font-size:14px;">กรอกค่าดอกไม้ 4 ค่า แล้วกด "ทำนาย" เพื่อเรียกโมเดลล่าสุดที่ Airflow deploy ไว้</p>
 
-  <div class="field">
-    <label>Sepal length (cm)</label>
-    <input type="number" step="0.1" id="sepal_length" value="5.1">
-  </div>
-  <div class="field">
-    <label>Sepal width (cm)</label>
-    <input type="number" step="0.1" id="sepal_width" value="3.5">
-  </div>
-  <div class="field">
-    <label>Petal length (cm)</label>
-    <input type="number" step="0.1" id="petal_length" value="1.4">
-  </div>
-  <div class="field">
-    <label>Petal width (cm)</label>
-    <input type="number" step="0.1" id="petal_width" value="0.2">
-  </div>
 
-  <button onclick="doPredict()">ทำนาย</button>
+<!-- ===================================================
+     TOP BAR
+=================================================== -->
 
-  <div id="result"></div>
+<header class="topbar">
 
-<script>
-async function doPredict() {
-  const payload = {
-    sepal_length: parseFloat(document.getElementById('sepal_length').value),
-    sepal_width: parseFloat(document.getElementById('sepal_width').value),
-    petal_length: parseFloat(document.getElementById('petal_length').value),
-    petal_width: parseFloat(document.getElementById('petal_width').value),
-  };
+    <div class="top-left">
 
-  const resultDiv = document.getElementById('result');
-  resultDiv.style.display = 'block';
-  resultDiv.className = '';
-  resultDiv.innerHTML = 'กำลังทำนาย...';
+        <div class="menu-icon">
+            ☰
+        </div>
 
-  try {
-    const res = await fetch('/predict', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
+        <div class="brand">
 
-    if (!res.ok) {
-      resultDiv.className = 'err';
-      resultDiv.innerHTML = '❌ ' + (data.detail || 'เกิดข้อผิดพลาด');
-      return;
-    }
+            <div class="youtube-logo">
+                ▶
+            </div>
 
-    resultDiv.className = 'ok';
-    resultDiv.innerHTML = `
-      <div style="font-size:18px; font-weight:bold;">🌼 ผลทำนาย: ${data.predicted_class}</div>
-      <div>ความมั่นใจ: ${(data.confidence * 100).toFixed(1)}%</div>
-      <div class="meta">โมเดลอัปเดตล่าสุด: ${data.model_last_modified}</div>
-    `;
-  } catch (e) {
-    resultDiv.className = 'err';
-    resultDiv.innerHTML = '❌ เรียก API ไม่สำเร็จ: ' + e.message;
-  }
-}
-</script>
+            YouTube
+
+            <span class="brand-light">
+                ML Studio
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <div class="top-status">
+
+        <span class="online-dot"></span>
+
+        API Online
+
+    </div>
+
+</header>
+
+
+
+<!-- ===================================================
+     SIDEBAR
+=================================================== -->
+
+<aside class="sidebar">
+
+    <a
+        class="nav-item active"
+        href="/"
+    >
+
+        <span class="nav-icon">
+            ▦
+        </span>
+
+        Dashboard
+
+    </a>
+
+
+    <a
+        class="nav-item"
+        href="#prediction"
+    >
+
+        <span class="nav-icon">
+            ▶
+        </span>
+
+        Prediction
+
+    </a>
+
+
+    <div class="menu-label">
+
+        Model
+
+    </div>
+
+
+    <a
+        class="nav-item"
+        href="/youtube/model-info"
+        target="_blank"
+    >
+
+        <span class="nav-icon">
+            ◈
+        </span>
+
+        Model Info
+
+    </a>
+
+
+    <a
+        class="nav-item"
+        href="/health"
+        target="_blank"
+    >
+
+        <span class="nav-icon">
+            ♥
+        </span>
+
+        Health
+
+    </a>
+
+
+    <div class="menu-label">
+
+        Developer
+
+    </div>
+
+
+    <a
+        class="nav-item"
+        href="/docs"
+        target="_blank"
+    >
+
+        <span class="nav-icon">
+            ⚙
+        </span>
+
+        Swagger API
+
+    </a>
+
+
+    <a
+        class="nav-item"
+        href="/redoc"
+        target="_blank"
+    >
+
+        <span class="nav-icon">
+            ◫
+        </span>
+
+        API Docs
+
+    </a>
+
+</aside>
+
+
+
+<!-- ===================================================
+     MAIN
+=================================================== -->
+
+<main class="main">
+
+
+<div class="page-header">
+
+    <div>
+
+        <h1 class="page-title">
+
+            Channel Analytics
+
+        </h1>
+
+        <div class="page-subtitle">
+
+            YouTube Views Prediction
+            • Machine Learning Dashboard
+
+        </div>
+
+    </div>
+
+
+    <div class="live-badge">
+
+        Workshop 2 • ML Pipeline
+
+    </div>
+
+</div>
+
+
+
+<!-- ===================================================
+     ANALYTICS
+=================================================== -->
+
+<section class="analytics-grid">
+
+
+    <div class="analytics-card">
+
+        <div class="analytics-title">
+
+            ML Model
+
+        </div>
+
+        <div class="analytics-value">
+
+            Random Forest
+
+        </div>
+
+        <div class="analytics-small green">
+
+            ● Production model
+
+        </div>
+
+    </div>
+
+
+
+    <div class="analytics-card">
+
+        <div class="analytics-title">
+
+            Prediction Target
+
+        </div>
+
+        <div class="analytics-value">
+
+            Views
+
+        </div>
+
+        <div class="analytics-small">
+
+            YouTube video views
+
+        </div>
+
+    </div>
+
+
+
+    <div class="analytics-card">
+
+        <div class="analytics-title">
+
+            Model Status
+
+        </div>
+
+        <div class="analytics-value green">
+
+            {model_status}
+
+        </div>
+
+        <div class="analytics-small">
+
+            current_model.pkl
+
+        </div>
+
+    </div>
+
+
+
+    <div class="analytics-card">
+
+        <div class="analytics-title">
+
+            Pipeline
+
+        </div>
+
+        <div class="analytics-value">
+
+            Airflow
+
+        </div>
+
+        <div class="analytics-small">
+
+            Automated ML workflow
+
+        </div>
+
+    </div>
+
+
+</section>
+
+
+
+<!-- ===================================================
+     MAIN GRID
+=================================================== -->
+
+<section class="content-grid">
+
+
+<!-- Prediction -->
+
+<section
+    class="panel"
+    id="prediction"
+>
+
+    <div class="panel-header">
+
+        <h2 class="panel-title">
+
+            Predict YouTube Views
+
+        </h2>
+
+        <p class="panel-description">
+
+            Enter video metadata and engagement
+            statistics to estimate total views
+            using the latest deployed ML model.
+
+        </p>
+
+    </div>
+
+
+    <div class="panel-body">
 """
-    # แปะฟอร์มพยากรณ์อากาศ (มาจาก weather.py) ต่อท้ายก่อนปิด </body></html>
-    return iris_page + WEATHER_FORM_HTML + "</body>\n</html>\n"
+
+    page_end = f"""
+
+    </div>
+
+</section>
+
+
+
+<!-- ===================================================
+     MODEL INFORMATION
+=================================================== -->
+
+<aside class="panel">
+
+    <div class="model-panel">
+
+        <div class="model-heading">
+
+            Model Performance
+
+        </div>
+
+
+        <div class="model-status">
+
+            <span class="status-circle"></span>
+
+            {model_status}
+
+        </div>
+
+
+
+        <div class="info-row">
+
+            <div class="info-label">
+
+                Algorithm
+
+            </div>
+
+            <div class="info-value">
+
+                RandomForestRegressor
+
+            </div>
+
+        </div>
+
+
+
+        <div class="info-row">
+
+            <div class="info-label">
+
+                Model Name
+
+            </div>
+
+            <div class="info-value">
+
+                youtube_views_rf
+
+            </div>
+
+        </div>
+
+
+
+        <div class="info-row">
+
+            <div class="info-label">
+
+                Features
+
+            </div>
+
+            <div class="info-value">
+
+                10 Input Features
+
+            </div>
+
+        </div>
+
+
+
+        <div class="info-row">
+
+            <div class="info-label">
+
+                Model Updated
+
+            </div>
+
+            <div class="info-value">
+
+                {model_modified}
+
+            </div>
+
+        </div>
+
+
+
+        <div class="info-row">
+
+            <div class="info-label">
+
+                Serving
+
+            </div>
+
+            <div class="info-value">
+
+                FastAPI
+
+            </div>
+
+        </div>
+
+
+
+        <!-- Mini Chart -->
+
+        <div class="chart-card">
+
+            <div class="chart-title">
+
+                Prediction Activity
+
+            </div>
+
+            <div class="chart">
+
+                <div
+                    class="bar"
+                    style="height:28%"
+                ></div>
+
+                <div
+                    class="bar"
+                    style="height:42%"
+                ></div>
+
+                <div
+                    class="bar"
+                    style="height:35%"
+                ></div>
+
+                <div
+                    class="bar"
+                    style="height:62%"
+                ></div>
+
+                <div
+                    class="bar"
+                    style="height:54%"
+                ></div>
+
+                <div
+                    class="bar"
+                    style="height:78%"
+                ></div>
+
+                <div
+                    class="bar"
+                    style="height:65%"
+                ></div>
+
+                <div
+                    class="bar"
+                    style="height:88%"
+                ></div>
+
+                <div
+                    class="bar"
+                    style="height:72%"
+                ></div>
+
+                <div
+                    class="bar"
+                    style="height:96%"
+                ></div>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="quick-title">
+
+            Developer Tools
+
+        </div>
+
+
+        <a
+            class="quick-link"
+            href="/health"
+            target="_blank"
+        >
+
+            Health Check
+
+            <span>
+                ↗
+            </span>
+
+        </a>
+
+
+        <a
+            class="quick-link"
+            href="/docs"
+            target="_blank"
+        >
+
+            Swagger API
+
+            <span>
+                ↗
+            </span>
+
+        </a>
+
+
+        <a
+            class="quick-link"
+            href="/youtube/model-info"
+            target="_blank"
+        >
+
+            Model Information
+
+            <span>
+                ↗
+            </span>
+
+        </a>
+
+
+    </div>
+
+</aside>
+
+
+</section>
+
+
+</main>
+
+
+</body>
+
+</html>
+"""
+
+    return (
+        page_start
+        + YOUTUBE_FORM_HTML
+        + page_end
+    )

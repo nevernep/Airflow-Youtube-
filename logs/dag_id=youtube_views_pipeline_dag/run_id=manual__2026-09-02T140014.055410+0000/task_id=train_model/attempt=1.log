@@ -1,0 +1,23 @@
+[2026-09-02T14:00:25.595+0000] {local_task_job_runner.py:123} INFO - ::group::Pre task execution logs
+[2026-09-02T14:00:25.618+0000] {taskinstance.py:2613} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: youtube_views_pipeline_dag.train_model manual__2026-09-02T14:00:14.055410+00:00 [queued]>
+[2026-09-02T14:00:25.627+0000] {taskinstance.py:2613} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: youtube_views_pipeline_dag.train_model manual__2026-09-02T14:00:14.055410+00:00 [queued]>
+[2026-09-02T14:00:25.628+0000] {taskinstance.py:2866} INFO - Starting attempt 1 of 2
+[2026-09-02T14:00:25.648+0000] {taskinstance.py:2889} INFO - Executing <Task(PythonOperator): train_model> on 2026-09-02 14:00:14.055410+00:00
+[2026-09-02T14:00:25.656+0000] {warnings.py:112} WARNING - /home/***/.local/lib/python3.12/site-packages/***/task/task_runner/standard_task_runner.py:70: DeprecationWarning: This process (pid=160) is multi-threaded, use of fork() may lead to deadlocks in the child.
+  pid = os.fork()
+
+[2026-09-02T14:00:25.658+0000] {standard_task_runner.py:72} INFO - Started process 168 to run task
+[2026-09-02T14:00:25.659+0000] {standard_task_runner.py:104} INFO - Running: ['***', 'tasks', 'run', 'youtube_views_pipeline_dag', 'train_model', 'manual__2026-09-02T14:00:14.055410+00:00', '--job-id', '10', '--raw', '--subdir', 'DAGS_FOLDER/ml_01_youtube_pipeline.py', '--cfg-path', '/tmp/tmp9vtjv046']
+[2026-09-02T14:00:25.660+0000] {standard_task_runner.py:105} INFO - Job 10: Subtask train_model
+[2026-09-02T14:00:25.740+0000] {task_command.py:467} INFO - Running <TaskInstance: youtube_views_pipeline_dag.train_model manual__2026-09-02T14:00:14.055410+00:00 [running]> on host 813b820bbdeb
+[2026-09-02T14:00:25.846+0000] {taskinstance.py:3132} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='workshop2' AIRFLOW_CTX_DAG_ID='youtube_views_pipeline_dag' AIRFLOW_CTX_TASK_ID='train_model' AIRFLOW_CTX_EXECUTION_DATE='2026-09-02T14:00:14.055410+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-09-02T14:00:14.055410+00:00'
+[2026-09-02T14:00:25.849+0000] {taskinstance.py:731} INFO - ::endgroup::
+[2026-09-02T14:00:27.731+0000] {logging_mixin.py:190} INFO - กำลังเทรน RandomForestRegressor...
+[2026-09-02T14:00:32.631+0000] {logging_mixin.py:190} INFO - เทรนโมเดลสำเร็จ
+[2026-09-02T14:00:32.632+0000] {logging_mixin.py:190} INFO - บันทึก Candidate Model ที่: /opt/***/models/youtube_models/candidate_manual__2026-09-02T14-00-14.055410-00-00.pkl
+[2026-09-02T14:00:32.687+0000] {python.py:240} INFO - Done. Returned value was: None
+[2026-09-02T14:00:32.702+0000] {taskinstance.py:340} INFO - ::group::Post task execution logs
+[2026-09-02T14:00:32.702+0000] {taskinstance.py:352} INFO - Marking task as SUCCESS. dag_id=youtube_views_pipeline_dag, task_id=train_model, run_id=manual__2026-09-02T14:00:14.055410+00:00, execution_date=20260902T140014, start_date=20260902T140025, end_date=20260902T140032
+[2026-09-02T14:00:32.804+0000] {local_task_job_runner.py:266} INFO - Task exited with return code 0
+[2026-09-02T14:00:32.830+0000] {taskinstance.py:3895} INFO - 1 downstream tasks scheduled from follow-on schedule check
+[2026-09-02T14:00:32.831+0000] {local_task_job_runner.py:245} INFO - ::endgroup::

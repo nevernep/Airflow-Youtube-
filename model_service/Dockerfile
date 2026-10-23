@@ -1,13 +1,17 @@
-# Dockerfile — Iris Model Serving API (Workshop 2, ตัวอย่างขั้นสูง)
-# แยก image ออกจาก Airflow โดยสิ้นเชิง เบาและเริ่มเร็วกว่ามาก
+# Dockerfile — YouTube Views Model Serving API
+# Workshop 2
+# แยก image ออกจาก Airflow โดยสิ้นเชิง
+
 FROM python:3.12-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py weather.py .
+# เปลี่ยนจาก weather.py -> youtube.py
+COPY ["main.py", "youtube.py", "./"]
 
 EXPOSE 8000
 

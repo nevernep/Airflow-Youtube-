@@ -1,0 +1,40 @@
+[2026-09-02T14:42:00.727+0000] {local_task_job_runner.py:123} INFO - ::group::Pre task execution logs
+[2026-09-02T14:42:00.750+0000] {taskinstance.py:2613} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: youtube_champion_pipeline_dag.log_result manual__2026-09-02T14:41:11.125606+00:00 [queued]>
+[2026-09-02T14:42:00.760+0000] {taskinstance.py:2613} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: youtube_champion_pipeline_dag.log_result manual__2026-09-02T14:41:11.125606+00:00 [queued]>
+[2026-09-02T14:42:00.768+0000] {taskinstance.py:2866} INFO - Starting attempt 1 of 2
+[2026-09-02T14:42:00.782+0000] {taskinstance.py:2889} INFO - Executing <Task(PythonOperator): log_result> on 2026-09-02 14:41:11.125606+00:00
+[2026-09-02T14:42:00.791+0000] {warnings.py:112} WARNING - /home/***/.local/lib/python3.12/site-packages/***/task/task_runner/standard_task_runner.py:70: DeprecationWarning: This process (pid=925) is multi-threaded, use of fork() may lead to deadlocks in the child.
+  pid = os.fork()
+
+[2026-09-02T14:42:00.793+0000] {standard_task_runner.py:72} INFO - Started process 926 to run task
+[2026-09-02T14:42:00.793+0000] {standard_task_runner.py:104} INFO - Running: ['***', 'tasks', 'run', 'youtube_champion_pipeline_dag', 'log_result', 'manual__2026-09-02T14:41:11.125606+00:00', '--job-id', '28', '--raw', '--subdir', 'DAGS_FOLDER/ml_02_youtube_pipeline.py', '--cfg-path', '/tmp/tmp9f3ky208']
+[2026-09-02T14:42:00.794+0000] {standard_task_runner.py:105} INFO - Job 28: Subtask log_result
+[2026-09-02T14:42:00.871+0000] {task_command.py:467} INFO - Running <TaskInstance: youtube_champion_pipeline_dag.log_result manual__2026-09-02T14:41:11.125606+00:00 [running]> on host 813b820bbdeb
+[2026-09-02T14:42:00.980+0000] {taskinstance.py:3132} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='workshop2' AIRFLOW_CTX_DAG_ID='youtube_champion_pipeline_dag' AIRFLOW_CTX_TASK_ID='log_result' AIRFLOW_CTX_EXECUTION_DATE='2026-09-02T14:41:11.125606+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-09-02T14:41:11.125606+00:00'
+[2026-09-02T14:42:00.982+0000] {taskinstance.py:731} INFO - ::endgroup::
+[2026-09-02T14:42:01.055+0000] {base.py:84} INFO - Retrieving connection 'postgres_target'
+[2026-09-02T14:42:01.062+0000] {sql.py:553} INFO - Running statement: 
+        INSERT INTO youtube_model_metrics
+        (
+            model_name,
+            rmse,
+            r2,
+            training_rows,
+            deployed
+        )
+        VALUES (%s, %s, %s, %s, %s);
+        , parameters: ('youtube_views_rf', 1013191.9369869843, 0.9786805338985876, 32759, True)
+[2026-09-02T14:42:01.065+0000] {sql.py:562} INFO - Rows affected: 1
+[2026-09-02T14:42:01.073+0000] {logging_mixin.py:190} INFO - ===== สรุปผล Stage 2 =====
+[2026-09-02T14:42:01.074+0000] {logging_mixin.py:190} INFO - YouTube Champion-Challenger
+[2026-09-02T14:42:01.074+0000] {logging_mixin.py:190} INFO - RMSE: 1,013,191.94 views
+[2026-09-02T14:42:01.075+0000] {logging_mixin.py:190} INFO - R²: 0.9787
+[2026-09-02T14:42:01.075+0000] {logging_mixin.py:190} INFO - Training Rows: 32,759
+[2026-09-02T14:42:01.075+0000] {logging_mixin.py:190} INFO - Deploy รอบนี้: ใช่
+[2026-09-02T14:42:01.076+0000] {logging_mixin.py:190} INFO - บันทึกผลลง PostgreSQL เรียบร้อย
+[2026-09-02T14:42:01.076+0000] {python.py:240} INFO - Done. Returned value was: None
+[2026-09-02T14:42:01.090+0000] {taskinstance.py:340} INFO - ::group::Post task execution logs
+[2026-09-02T14:42:01.091+0000] {taskinstance.py:352} INFO - Marking task as SUCCESS. dag_id=youtube_champion_pipeline_dag, task_id=log_result, run_id=manual__2026-09-02T14:41:11.125606+00:00, execution_date=20260902T144111, start_date=20260902T144200, end_date=20260902T144201
+[2026-09-02T14:42:01.129+0000] {local_task_job_runner.py:266} INFO - Task exited with return code 0
+[2026-09-02T14:42:01.153+0000] {taskinstance.py:3895} INFO - 0 downstream tasks scheduled from follow-on schedule check
+[2026-09-02T14:42:01.155+0000] {local_task_job_runner.py:245} INFO - ::endgroup::
